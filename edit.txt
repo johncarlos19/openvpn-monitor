@@ -1,0 +1,8 @@
+host: "20.232.47.70" ,
+port: 5555 ,
+name: "Server Test 70" ,
+password: "admin1234" ,
+show_disconnect: True ,
+maxRegister: 5 ,
+clientActive: 0 ,
+clientRegister: 0
