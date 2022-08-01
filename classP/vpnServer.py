@@ -18,8 +18,6 @@ class VpnServer(db.Model):
     clientActive = db.Column(db.Integer)
     clientRegister = db.Column(db.Integer)
 
-    def __getattr__(self, attr):
-        return self[attr]
 
 # class vpnServer:
 # 	def __init__(self,

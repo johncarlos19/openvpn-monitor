@@ -857,6 +857,7 @@ def openvpnobject():
             aux = getServerInformation()
             listRet = []
             for value in aux:
+                print(aux[value])
                 aux[value]['_sa_instance_state'] = None
                 try:
                     aux[value]['state']['local_ip'] = str(aux[value]['state']['local_ip'])
@@ -886,13 +887,12 @@ def openvpnobject():
                 except:
                     print('no found')
                 aux[value]['sessions'] = count
-                print(aux[value]['state']['local_ip'])
+                # print(aux[value]['state']['local_ip'])
 
                 listRet.append(aux[value])
             print(listRet)
             jsonstr1 = json.dumps(listRet, default=lambda o: o.__dict__,
                                   sort_keys=True)
-            return jsonstr1
             return jsonstr1
     else:
         return '404'
