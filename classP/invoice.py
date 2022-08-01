@@ -8,6 +8,7 @@ db = conf.DBConf()
 
 class Invoice(db.Model):
 	__bind_key__ = 'vpnManager'
+	__tablename__ = 'invoice'
 	id=db.Column(db.Integer, primary_key=True)
 	detail=db.Column(db.String(100))
 	idClient=db.Column(db.String(50))

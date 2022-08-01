@@ -7,6 +7,7 @@ db = conf.DBConf()
 
 class Comp(db.Model):
     __bind_key__ = 'vpnManager'
+    __tablename__ = 'comp'
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(50))
     documento = db.Column(db.String(20))

@@ -7,6 +7,7 @@ db = conf.DBConf()
 
 class Client(db.Model):
 	__bind_key__ = 'vpnManager'
+	__tablename__ = 'client'
 	user=db.Column(db.String(50), primary_key=True)
 	nombre=db.Column(db.String(50))
 	apellido=db.Column(db.String(50))

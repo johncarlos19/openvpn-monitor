@@ -7,6 +7,7 @@ db = conf.DBConf()
 
 class DetailInvoice:
 	__bind_key__ = 'vpnManager'
+	__tablename__ = 'detailInvoice'
 	id=db.Column(db.Integer, primary_key=True)
 	nombre=db.Column(db.String(50))
 	descripcion=db.Column(db.String(100))

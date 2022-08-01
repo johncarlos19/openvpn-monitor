@@ -44,6 +44,7 @@ class Conf:
 
         app = Flask(__name__)
         app.config["SQLALCHEMY_DATABASE_URI"] = f"postgresql://{username}:{password}@{domain}:{port}/{dbname}"
+        app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         app.config["SQLALCHEMY_BINDS"] = {
         dbname2:        f"postgresql://{username}:{password}@{domain}:{port}/{dbname2}"
     }

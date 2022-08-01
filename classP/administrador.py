@@ -8,6 +8,7 @@ db = conf.DBConf()
 
 class Administrador(db.Model):
 	__bind_key__ = 'vpnManager'
+	__tablename__ = 'administrador'
 	usuario=db.Column(db.String(50), primary_key=True)
 	nombre=db.Column(db.String(50))
 	apellido=db.Column(db.String(50))

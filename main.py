@@ -3,7 +3,6 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-
 try:
     import ConfigParser as configparser
 except ImportError:
@@ -16,6 +15,7 @@ except ImportError:
 
 try:
     import GeoIP as geoip1
+
     geoip1_available = True
 except ImportError:
     geoip1_available = False
@@ -23,6 +23,7 @@ except ImportError:
 try:
     from geoip2 import database
     from geoip2.errors import AddressNotFoundError
+
     geoip2_available = True
 except ImportError:
     geoip2_available = False
@@ -42,10 +43,11 @@ from collections import OrderedDict, deque
 from pprint import pformat
 from semantic_version import Version as semver
 # from flask import Flask, request, jsonify
-from flask import Flask,request,render_template,url_for,jsonify,redirect,flash
+from flask import Flask, request, render_template, url_for, jsonify, redirect, flash
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.ext.declarative import DeclarativeMeta
 from dbconf import Conf
+
 # from radiusClass.nas import Nas
 
 # Init App
@@ -67,14 +69,13 @@ db = appConf.DBConf()
 # }
 
 
-
 from radiusClass.nas import Nas
 from radiusClass.radacct import Radacct
 from radiusClass.radcheck import Radcheck
 
 from classP.administrador import Administrador
 from classP.client import Client
-
+from classP.vpnServer import VpnServer
 
 
 # Create A Model For Table
@@ -83,7 +84,6 @@ from classP.client import Client
 #     id = db.Column(db.Integer, primary_key=True)
 #     blog_title = db.Column(db.String(1000))
 #     blog_description = db.Column(db.String(6000))
-
 
 
 class AlchemyEncoder(json.JSONEncoder):
@@ -95,7 +95,7 @@ class AlchemyEncoder(json.JSONEncoder):
             for field in [x for x in dir(obj) if not x.startswith('_') and x != 'metadata']:
                 data = obj.__getattribute__(field)
                 try:
-                    json.dumps(data) # this will fail on non-encodable values, like other classes
+                    json.dumps(data)  # this will fail on non-encodable values, like other classes
                     fields[field] = data
                 except TypeError:
                     fields[field] = None
@@ -103,15 +103,16 @@ class AlchemyEncoder(json.JSONEncoder):
             return fields
 
         return json.JSONEncoder.default(self, obj)
+
+
 # 	def __init__(self,
 # id,nasname,shortname,type,ports,secret,server,community,description):
 
 
-
-
 if sys.version_info[0] == 2:
-    reload(sys) # noqa
+    reload(sys)  # noqa
     sys.setdefaultencoding('utf-8')
+
 
 # app = Flask(__name__)
 
@@ -152,9 +153,10 @@ def get_str(s):
 def is_truthy(s):
     return s in ['True', 'true', 'Yes', 'yes', True]
 
+
 class ConfigLoader(object):
 
-    def __init__(self, config_file):
+    def __init__(self, config_file, serverID):
         self.settings = {}
         self.vpns = OrderedDict()
         config = configparser.RawConfigParser()
@@ -178,10 +180,19 @@ class ConfigLoader(object):
         for section in config.sections():
             if section.lower() == 'openvpn-monitor':
                 self.parse_global_section(config)
-            else:
-                self.parse_vpn_section(config, section)
+            # else:
+            #     self.parse_vpn_section(config, section)
+        # self.parse_vpn_section(config, section)
+        print('dbTurno')
+        print(serverID)
+        if serverID is not None:
+            self.parse_vpn_section_db_specific(serverID)
+        else:
+            self.parse_vpn_section_db()
 
     def load_default_settings(self):
+        print('Entro local')
+
         info('Using default settings => localhost:5555')
         self.settings = {'site': 'Default Site',
                          'maps': 'True',
@@ -194,6 +205,7 @@ class ConfigLoader(object):
                                     'show_disconnect': False}
 
     def parse_global_section(self, config):
+        print('Entro global')
         global_vars = ['site', 'logo', 'latitude', 'longitude', 'maps', 'maps_height', 'geoip_data', 'datetime_format']
         for var in global_vars:
             try:
@@ -210,10 +222,12 @@ class ConfigLoader(object):
             debug("=== begin section\n{0!s}\n=== end section".format(self.settings))
 
     def parse_vpn_section(self, config, section):
+        print('entro vpn section')
         self.vpns[section] = {}
         vpn = self.vpns[section]
         options = config.options(section)
         for option in options:
+            print(option)
             try:
                 vpn[option] = config.get(section, option)
                 if vpn[option] == -1:
@@ -221,6 +235,71 @@ class ConfigLoader(object):
             except configparser.Error as e:
                 warning('CONFIG: {0!s} on option {1!s}: '.format(e, option))
                 vpn[option] = None
+        vpn['show_disconnect'] = is_truthy(vpn.get('show_disconnect', False))
+        if args.debug:
+            debug("=== begin section\n{0!s}\n=== end section".format(vpn))
+
+    def parse_vpn_section_db(self):
+        vpnServer = VpnServer.query.all()
+        for value in vpnServer:
+            self.vpns[value.id] = {}
+            vpn = self.vpns[value.id]
+            # options = config.options(section)
+            # vpn['host'] = value.id
+            # vpn['port'] = value.port
+            # vpn['name'] = value.name
+            # vpn['password'] = value.password
+            # vpn['show_disconnect'] = value.show_disconnect
+            print(type(value))
+            for key in value.__dict__:
+
+                try:
+
+                    vpn[key] = value.__dict__[key]
+                    if vpn[key] == -1:
+                        warning('CONFIG: skipping {0!s}'.format(key))
+                except Exception as e:
+                    warning('CONFIG: {0!s} on option {1!s}: '.format(e, key))
+                    vpn[key] = None
+            vpn['show_disconnect'] = is_truthy(vpn.get('show_disconnect', False))
+            if args.debug:
+                debug("=== begin section\n{0!s}\n=== end section".format(vpn))
+            # print(value.id)
+
+        # for option in options:
+        #     try:
+        #         vpn[option] = config.get(section, option)
+        #         if vpn[option] == -1:
+        #             warning('CONFIG: skipping {0!s}'.format(option))
+        #     except configparser.Error as e:
+        #         warning('CONFIG: {0!s} on option {1!s}: '.format(e, option))
+        #         vpn[option] = None
+        # vpn['show_disconnect'] = is_truthy(vpn.get('show_disconnect', False))
+        # if args.debug:
+        #     debug("=== begin section\n{0!s}\n=== end section".format(vpn))
+
+    def parse_vpn_section_db_specific(self, id):
+
+        value = VpnServer.query.filter_by(id=id).first()
+        self.vpns[value.id] = {}
+        vpn = self.vpns[value.id]
+        # options = config.options(section)
+        # vpn['host'] = value.id
+        # vpn['port'] = value.port
+        # vpn['name'] = value.name
+        # vpn['password'] = value.password
+        # vpn['show_disconnect'] = value.show_disconnect
+        print(type(value))
+        for key in value.__dict__:
+
+            try:
+
+                vpn[key] = value.__dict__[key]
+                if vpn[key] == -1:
+                    warning('CONFIG: skipping {0!s}'.format(key))
+            except Exception as e:
+                warning('CONFIG: {0!s} on option {1!s}: '.format(e, key))
+                vpn[key] = None
         vpn['show_disconnect'] = is_truthy(vpn.get('show_disconnect', False))
         if args.debug:
             debug("=== begin section\n{0!s}\n=== end section".format(vpn))
@@ -371,8 +450,8 @@ class OpenvpnMgmtInterface(object):
             if args.debug:
                 debug("=== begin split line\n{0!s}\n=== end split line".format(parts))
             if parts[0].startswith('>INFO') or \
-               parts[0].startswith('END') or \
-               parts[0].startswith('>CLIENT'):
+                    parts[0].startswith('END') or \
+                    parts[0].startswith('>CLIENT'):
                 continue
             else:
                 state['up_since'] = get_date(date_string=parts[0], uts=True)
@@ -380,6 +459,7 @@ class OpenvpnMgmtInterface(object):
                 state['success'] = parts[2]
                 if parts[3]:
                     state['local_ip'] = ip_address(parts[3])
+                    # state['local_ip'] = parts[3]
                 else:
                     state['local_ip'] = ''
                 if parts[4]:
@@ -418,8 +498,8 @@ class OpenvpnMgmtInterface(object):
             if parts[0].startswith('END'):
                 break
             if parts[0].startswith('TITLE') or \
-               parts[0].startswith('GLOBAL') or \
-               parts[0].startswith('TIME'):
+                    parts[0].startswith('GLOBAL') or \
+                    parts[0].startswith('TIME'):
                 continue
             if parts[0] == 'HEADER':
                 if parts[1] == 'CLIENT_LIST':
@@ -431,8 +511,8 @@ class OpenvpnMgmtInterface(object):
                 continue
 
             if parts[0].startswith('TUN') or \
-               parts[0].startswith('TCP') or \
-               parts[0].startswith('Auth'):
+                    parts[0].startswith('TCP') or \
+                    parts[0].startswith('Auth'):
                 parts = parts[0].split(',')
             if parts[0] == 'TUN/TAP read bytes':
                 client_session['tuntap_read'] = int(parts[1])
@@ -557,8 +637,8 @@ class OpenvpnMgmtInterface(object):
     @staticmethod
     def is_mac_address(s):
         return len(s) == 17 and \
-            len(s.split(':')) == 6 and \
-            all(c in string.hexdigits for c in s.replace(':', ''))
+               len(s.split(':')) == 6 and \
+               all(c in string.hexdigits for c in s.replace(':', ''))
 
     @staticmethod
     def get_remote_address(ip, port):
@@ -566,11 +646,17 @@ class OpenvpnMgmtInterface(object):
             return '{0!s}:{1!s}'.format(ip, port)
         else:
             return '{0!s}'.format(ip)
+
+
 def customVaDecoder(va):
     return namedtuple('X', va.keys())(*va.values())
+
+
 def main(**kwargs):
     args = get_args()
-    cfg = ConfigLoader(args.config)
+    print(args.config)
+    print('ya --')
+    cfg = ConfigLoader(args.config,None)
     monitor = OpenvpnMgmtInterface(cfg, **kwargs)
     pretty_vpns = pformat((dict(monitor.vpns)))
     debug("=== begin vpns\n{0!s}\n=== end vpns".format(pretty_vpns))
@@ -579,6 +665,16 @@ def main(**kwargs):
     # if args.debug:
     #     pretty_vpns = pformat((dict(monitor.vpns)))
     #     debug("=== begin vpns\n{0!s}\n=== end vpns".format(pretty_vpns))
+def getServerInformation(**kwargs):
+    args = get_args()
+    print(args.config)
+    print('ya --')
+    cfg = ConfigLoader(args.config, kwargs.get('id'))
+    monitor = OpenvpnMgmtInterface(cfg, **kwargs)
+    pretty_vpns = pformat((dict(monitor.vpns)))
+    debug("=== begin vpns\n{0!s}\n=== end vpns".format(pretty_vpns))
+
+    return dict(monitor.vpns)
 
 
 def get_args():
@@ -591,37 +687,81 @@ def get_args():
                         required=False, default='./openvpn-monitor.conf',
                         help='Path to config file openvpn-monitor.conf')
     return parser.parse_args()
+
+
 def _json_object_hook(d): return namedtuple('X', d.keys())(*d.values())
 
 
 @app.route('/', methods=['GET', 'POST'])
 def welcome():
     return "Hello World!"
+
+
 @app.route('/openvpn-monitor/', methods=['GET'])
 def monitor():
-    args = get_args()
-    wsgi = False
-    aux = main()
+    # args = get_args()
+    # wsgi = False
+    aux = getServerInformation()
+    print(type(aux))
 
     # jsonStr2 = json.loads(aux)
-    debug("{0!s}".format(aux))
+    # debug("{0!s}".format(aux)) esefun
     # debug("{0!s}".format(jsonStr))
     # debug("{0!s}".format(jsonStr2))
     # return jsonify(jsonStr)
-    print(type(aux))
-    return aux
-@app.route('/radacct',methods=['GET'])
+    # print(type(aux))
+    # return aux
+
+    listRet = []
+    for value in aux:
+        aux[value]['_sa_instance_state'] = None
+        try:
+            aux[value]['state']['local_ip'] = str(aux[value]['state']['local_ip'])
+            if aux[value]['state']['remote_ip']  is not None:
+
+                aux[value]['state']['remote_ip'] = str(aux[value]['state']['remote_ip'])
+        except:
+            print('no found')
+        try:
+            aux[value]['version'] = str(aux[value]['version'])
+        except:
+            print('no found')
+        try:
+            aux[value]['state']['up_since'] = int(round(aux[value]['state']['up_since'].timestamp()))
+            print(aux[value]['state']['up_since'])
+        except:
+            print('no found')
+        try:
+            for val in aux[value]['sessions']:
+                aux[value]['sessions'][val]['connected_since'] = int(round(aux[value]['sessions'][val]['connected_since'].timestamp()))
+                aux[value]['sessions'][val]['last_seen'] = int(round(aux[value]['sessions'][val]['last_seen'].timestamp()))
+                aux[value]['sessions'][val]['local_ip'] = str(aux[value]['sessions'][val]['local_ip'])
+                aux[value]['sessions'][val]['remote_ip'] = str(aux[value]['sessions'][val]['remote_ip'])
+
+        except:
+            print('no found')
+
+        print(aux[value]['state']['local_ip'])
+
+        listRet.append(aux[value])
+    print(listRet)
+    jsonstr1 = json.dumps(listRet, default=lambda o: o.__dict__,
+            sort_keys=True )
+    return jsonstr1
+
+
+@app.route('/radacct', methods=['GET'])
 def radacct():
     content_type = request.headers.get('Content-Type')
     if (content_type == 'application/json'):
         print(type('string'))
-# <class 'str'>
+        # <class 'str'>
         posts = Radacct.query.all()
-    # print(type(posts))
-    # jsonStr2 = json.loads(posts)
-    # debug("{0!s}".format(posts))
-    # debug("{0!s}".format(jsonStr2))
-    # jsonStr = json.dumps(posts)
+        # print(type(posts))
+        # jsonStr2 = json.loads(posts)
+        # debug("{0!s}".format(posts))
+        # debug("{0!s}".format(jsonStr2))
+        # jsonStr = json.dumps(posts)
         listRet = []
         for value in posts:
             listRet.append(value)
@@ -629,11 +769,10 @@ def radacct():
         return jsonstr1
 
 
-@app.route('/nas',methods=['GET'])
+@app.route('/nas', methods=['GET'])
 def index():
     print(type('string'))
-# <class 'str'>
-
+    # <class 'str'>
 
     posts = Nas.query.all()
     # print(type(posts))
@@ -648,27 +787,31 @@ def index():
     jsonstr1 = json.dumps(listRet, cls=AlchemyEncoder)
     return jsonstr1
     # return render_template("index.html",posts=posts)
-@app.route('/nasobject',methods=['POST','GET'])
+
+
+@app.route('/nasobject', methods=['POST', 'GET'])
 def nasobject():
     content_type = request.headers.get('Content-Type')
     if (content_type == 'application/json'):
         if request.method == 'POST':
             json_data = request.get_json()
-            nasname= json_data['nasname']
-            shortname= json_data['shortname']
-            type1= json_data['type']
-            ports= json_data['ports']
-            secret= json_data['secret']
-            server= json_data['server']
-            community= json_data['community']
-            description= json_data['description']
-            
-            nas = Nas(nasname=nasname, shortname=shortname, type=type1, ports=ports, secret=secret, server=server, community=community, description=description)
+            nasname = json_data['nasname']
+            shortname = json_data['shortname']
+            type1 = json_data['type']
+            ports = json_data['ports']
+            secret = json_data['secret']
+            server = json_data['server']
+            community = json_data['community']
+            description = json_data['description']
+
+            nas = Nas(nasname=nasname, shortname=shortname, type=type1, ports=ports, secret=secret, server=server,
+                      community=community, description=description)
             db.session.add(nas)
             # db.session.commit()
             db.session.flush()
             db.session.refresh(nas)
             db.session.commit()
+
             jsonstr1 = json.dumps(nas, cls=AlchemyEncoder)
             return jsonstr1
         elif request.method == 'GET':
@@ -680,12 +823,84 @@ def nasobject():
         return '404'
 
 
+# Class Principal
 
-    
+@app.route('/openvpnServer', methods=['POST', 'GET'])
+def openvpnobject():
+    content_type = request.headers.get('Content-Type')
+    if (content_type == 'application/json'):
+        if request.method == 'POST':
+            json_data = request.get_json()
+
+            host = json_data['host']
+            port = json_data['port']
+            name = json_data['name']
+            password = json_data['password']
+            show_disconnect = json_data['show_disconnect']
+            maxRegister = json_data['maxRegister']
+            clientActive = json_data['clientActive']
+            clientRegister = json_data['clientRegister']
+
+            vpnServer = VpnServer(host=host, port=port, name=name, password=password, show_disconnect=show_disconnect,
+                                  maxRegister=maxRegister, clientActive=clientActive, clientRegister=clientRegister)
+            db.session.add(vpnServer)
+            # db.session.commit()
+            db.session.flush()
+            db.session.refresh(vpnServer)
+            db.session.commit()
+            jsonstr1 = json.dumps(vpnServer, cls=AlchemyEncoder)
+            return jsonstr1
+        elif request.method == 'GET':
+            # json_data = request.get_json()
+            # aux = VpnServer.query.filter_by(id=json_data['id']).first()
+            # jsonstr1 = json.dumps(aux, cls=AlchemyEncoder)
+            aux = getServerInformation()
+            listRet = []
+            for value in aux:
+                aux[value]['_sa_instance_state'] = None
+                try:
+                    aux[value]['state']['local_ip'] = str(aux[value]['state']['local_ip'])
+                    if aux[value]['state']['remote_ip'] is not None:
+                        aux[value]['state']['remote_ip'] = str(aux[value]['state']['remote_ip'])
+                except:
+                    print('no found')
+                try:
+                    aux[value]['version'] = str(aux[value]['version'])
+                except:
+                    print('no found')
+                try:
+                    aux[value]['state']['up_since'] = int(round(aux[value]['state']['up_since'].timestamp()))
+                    print(aux[value]['state']['up_since'])
+                except:
+                    print('no found')
+                count = 0
+                try:
+                    for val in aux[value]['sessions']:
+                        count+=1
+                        aux[value]['sessions'][val]['connected_since'] = int(
+                            round(aux[value]['sessions'][val]['connected_since'].timestamp()))
+                        aux[value]['sessions'][val]['last_seen'] = int(
+                            round(aux[value]['sessions'][val]['last_seen'].timestamp()))
+                        aux[value]['sessions'][val]['local_ip'] = str(aux[value]['sessions'][val]['local_ip'])
+                        aux[value]['sessions'][val]['remote_ip'] = str(aux[value]['sessions'][val]['remote_ip'])
+                except:
+                    print('no found')
+                aux[value]['sessions'] = count
+                print(aux[value]['state']['local_ip'])
+
+                listRet.append(aux[value])
+            print(listRet)
+            jsonstr1 = json.dumps(listRet, default=lambda o: o.__dict__,
+                                  sort_keys=True)
+            return jsonstr1
+            return jsonstr1
+    else:
+        return '404'
+
 
 # <class 'str'>
 
-    # return render_template("index.html",posts=posts)
+# return render_template("index.html",posts=posts)
 
 @app.route('/openvpn-monitor-remove/', methods=['POST'])
 def openvpnmonitorremove():
@@ -719,13 +934,17 @@ def openvpnmonitorremove():
     else:
         return 'Content-Type not supported!'
 
+
 if __name__ == '__main__':
     class args(object):
         debug = False
         config = './openvpn-monitor.conf'
+
+
     # args = get_args()
     # wsgi = False
     # main()
     with app.app_context():
-        db.create_all() # <--- create db object.
-    app.run(host='0.0.0.0', port=8000,debug=True)
+        db.create_all()  # <--- create db object.
+        db.create_all(bind=['vpnManager'])
+    app.run(host='0.0.0.0', port=8000, debug=True)

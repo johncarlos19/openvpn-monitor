@@ -7,6 +7,7 @@ db = conf.DBConf()
 
 class VpnServer(db.Model):
     __bind_key__ = 'vpnManager'
+    __tablename__ = 'vpnServer'
     id = db.Column(db.Integer, primary_key=True)
     host = db.Column(db.String(20))
     port = db.Column(db.Integer)
@@ -16,6 +17,9 @@ class VpnServer(db.Model):
     maxRegister = db.Column(db.Integer)
     clientActive = db.Column(db.Integer)
     clientRegister = db.Column(db.Integer)
+
+    def __getattr__(self, attr):
+        return self[attr]
 
 # class vpnServer:
 # 	def __init__(self,
