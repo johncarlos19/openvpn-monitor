@@ -43,11 +43,12 @@ from collections import OrderedDict, deque
 from pprint import pformat
 from semantic_version import Version as semver
 # from flask import Flask, request, jsonify
-from flask import Flask, request, render_template, url_for, jsonify, redirect, flash
+from flask import Flask,session, request, render_template, url_for, jsonify, redirect, flash
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.ext.declarative import DeclarativeMeta
 from dbconf import Conf
-
+from encrypt import AESCipher
+from jwcrypto import jwe, jwt
 # from radiusClass.nas import Nas
 
 # Init App
@@ -55,6 +56,7 @@ appConf = Conf()
 appConf.confSys()
 app = appConf.FlaskConf()
 db = appConf.DBConf()
+encrypt = AESCipher('BY5kWP2hCv8wwkpBfNP96BMmGuuB3IHS')
 # app.config['SECRET_KEY'] = 'thisissecret'
 # our database uri
 # username = "postgres"
@@ -84,6 +86,59 @@ from classP.vpnServer import VpnServer
 #     id = db.Column(db.Integer, primary_key=True)
 #     blog_title = db.Column(db.String(1000))
 #     blog_description = db.Column(db.String(6000))
+# pubKey = {'k':\
+#            '-----BEGIN PUBLIC KEY-----\n'+
+# 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjApRwRb3gL5u9FJsYZJP\n'+
+# 'TxkASU0nYAsOXdAsQWrWLzC401xUatJLrKm6fViXEnCgtJP957z8EmaiG4uY2iV3\n'+
+# 'ufvb8JS6t2GTF0/xHyGKpbQrW/RZaXGKV3N9wL53O/O+V7hxlAxXxygLZ/xXb/+U\n'+
+# '5lmEyUWtyBWpazpuR0jAVy/dwvtkwLQr5EZdmF7DgzVElYeWbK5LGrZkQ97WUXh1\n'+
+# 'KxyOZuN5sP0jdo1y+3fWuNgj4rZ/YwPhvVA1AlkDzl++zJ0hZQSjz9JWQMm/ek7l\n'+
+# 'RNhDuLB5j20IbZdj22nOkYnIFrixFbaXPZ/2SgTexmmf+Zl9y6lw5hwaJxJl6/84\n'+
+# 'IwIDAQAB\n'+
+# '-----END PUBLIC KEY-----'
+#     }
+# # decrypt on the other end using the private key
+# privKey = {'k': 
+#     '-----BEGIN RSA PRIVATE KEY-----\n'+
+#     'MIIEpAIBAAKCAQEAjApRwRb3gL5u9FJsYZJPTxkASU0nYAsOXdAsQWrWLzC401xU\n'+
+# 'atJLrKm6fViXEnCgtJP957z8EmaiG4uY2iV3ufvb8JS6t2GTF0/xHyGKpbQrW/RZ\n'+
+# 'aXGKV3N9wL53O/O+V7hxlAxXxygLZ/xXb/+U5lmEyUWtyBWpazpuR0jAVy/dwvtk\n'+
+# 'wLQr5EZdmF7DgzVElYeWbK5LGrZkQ97WUXh1KxyOZuN5sP0jdo1y+3fWuNgj4rZ/\n'+
+# 'YwPhvVA1AlkDzl++zJ0hZQSjz9JWQMm/ek7lRNhDuLB5j20IbZdj22nOkYnIFrix\n'+
+# 'FbaXPZ/2SgTexmmf+Zl9y6lw5hwaJxJl6/84IwIDAQABAoIBABb4glyH5eVKV2zg\n'+
+# 'MEL4+uVglnlvnGvWpG6i/P9mBOgMt+SDmp1DDYKu/JYe9/jgXJwCQn3GtBpYl3Kp\n'+
+# 'PVNbHf5136fg3ZfC+5uxUz3mBJYVrZ8Rv7DaHPUnTpNVKr28x5Yf/RFpzOQwH17Z\n'+
+# 'N4Z5h/UY7f0N3umZFAcwuHIc7t/eDNxRHhYhCMWkzYESEZ40IqRrVfdnwfNLE/Kf\n'+
+# 'pyp48Nv2cTOns24aX8YsXsJR61Ku9ylVNgX+6PsCQZsuGC+uYmPKBFSpmzplXkjz\n'+
+# 'rl60M4ruf9+ImEQiTf7j2drRKm8cR7pF4KbdWt4W2FyGQhZQ8uoK6P6q5w+D/LOr\n'+
+# 'utZC4+ECgYEA5bpMJjUPT+6jO3hP3p1Bwxc0qyMCW1J5vb7a3myuYRqd5K+IAWSy\n'+
+# '0IWexJNFthNC8BQcrdW6JfbiptBpixOnsZpt6tguTY+q+dgRe7QGxsoBLZ1r/gr2\n'+
+# 'JtGwBzhq/u7v+PRmcrsuzGkED1oMS1+B0H1EQsExfYmuIEN7T75zSOkCgYEAnA5B\n'+
+# '7b0mex2noXAJHWDie4bZjdL9TOrWgbXX9xS/hVmGZgjf8eWPxLYPkei6NX5Un2Qw\n'+
+# '9Q2336QPDAqaFwCTVChQ1eWd/ualjwenqKQqoarxgCxOocr82wIFikvDrNAFVT23\n'+
+# 'en1xCFTUhVzhmsVHg2Z51O/Mo7ecsaVIWHnmkSsCgYEAux/H/WtFAMAKuFtk+5ku\n'+
+# 'wwH5BdmrhsWkorl+wKTYWgJ7UJbmevQSb6YX0FmB9DC2WqaXQcYRLfFvZ5/mCMJG\n'+
+# '23VGSYA0HzuCcqbcft4CkxRiZ0yOdc1p+e7dqtP625O3Zxt1A8mS8jAsfXDFCPRP\n'+
+# '4orW+mUxsedfLaqqHCeu8lkCgYBkxPQfnyeNEo4fOeg410oIOACdiyPTmkUfhxvI\n'+
+# 'ydYONswJcSui2PioLmQJdP1g842TSzAt3Ujhmd+5h9MOjWmVS18/b8FBSxCXNns1\n'+
+# '86QvtuGxQWsZIKl8hmarcdcN7Vm0PGERMJVfqt98qohn14IhQHflX1+GTFdbgv4f\n'+
+# 'W7/d9wKBgQC0Zes/d7wLFnDJKnhIz0dLExT4QdA5iN7f3h4uPGdiaUBwQ/4ZVqrx\n'+
+# 'EnLP1WkU0Zmb6naeYmvw5VXvs9N3FK0rAXsQe0uvM60d2u8QHMYm5LekCClguDWG\n'+
+# 'i3EhfU/HrGeB/eEZPPdv0zL7xcvZG+5pW1apo/qa3trOMhwSszhEMQ==\n'+
+# '-----END RSA PRIVATE KEY-----'
+# }
+
+# def jwtEncrypt(claims):
+#     eprot = {'alg': "RSA-OAEP", 'enc': "A128CBC-HS256"}
+#     E = jwe.JWE(json.dumps(claims), json.dumps(eprot))
+#     E.add_recipient(pubKey)
+#     encrypted_token = E.serialize(compact=True)
+#     return encrypted_token
+# def jwrDesencrypt(token):
+#     E = jwe.JWE()
+#     E.deserialize(token, key=privKey)
+#     decrypted_payload = E.payload
+#     return decrypted_payload
 
 
 class AlchemyEncoder(json.JSONEncoder):
@@ -692,6 +747,26 @@ def get_args():
 def _json_object_hook(d): return namedtuple('X', d.keys())(*d.values())
 
 
+
+@app.route('/status')
+def index():
+	if 'user' in session:
+		return encrypt.decrypt(session['password'])
+	return 'No session <a href="/login">Please Log in </a>'
+
+	return 'Please <a href="/login">Log in </a>'
+
+@app.route('/login')
+def login():
+	session['user'] = 'Kai'
+	session['password'] = encrypt.encrypt('admin1234')
+	return 'Logged in as: ' + session['user'] + '<a href="/logout"> Log out</a>'
+
+@app.route('/logout')
+def logout():
+	session.pop('user', None)
+	return 'Logged out. ' + '<a href="/">Home</a>'
+
 @app.route('/', methods=['GET', 'POST'])
 def welcome():
     return "Hello World!"
@@ -770,7 +845,7 @@ def radacct():
 
 
 @app.route('/nas', methods=['GET'])
-def index():
+def nas():
     print(type('string'))
     # <class 'str'>
 
@@ -821,6 +896,9 @@ def nasobject():
             return jsonstr1
     else:
         return '404'
+
+
+
 
 
 # Class Principal
@@ -899,6 +977,72 @@ def openvpnobject():
 
 
 # <class 'str'>
+
+@app.route('/client', methods=['POST', 'GET'])
+def client():
+    content_type = request.headers.get('Content-Type')
+    if (content_type == 'application/json'):
+        if request.method == 'POST':
+            json_data = request.get_json()
+
+            aux = Client.query.filter_by(user=json_data['user']).first()
+            print(aux)
+            if aux is not None:
+                print('Existe')
+                return 'ErrorUserExist'
+            else:
+                user = json_data['user']
+                nombre = json_data['nombre']
+                apellido = json_data['apellido']
+                documento = json_data['documento']
+                fechaNacimiento = json_data['fechaNacimiento']
+                status = json_data['status']
+                password = json_data['password']
+                FechaCreacion = json_data['FechaCreacion']
+                fechaExpiracion = json_data['fechaExpiracion']
+                DataMaxUse = json_data['DataMaxUse']
+                idVPN = json_data['idVPN']
+                idPackPrincipal = json_data['idPackPrincipal']
+                typeClient = json_data['typeClient']
+                userAdm = json_data['userAdm']
+                idvpnServerDefault = json_data['idvpnServerDefault']
+
+                clien = Client(
+                user=user,
+                nombre=nombre,
+                apellido=apellido,
+                documento=documento,
+                fechaNacimiento=fechaNacimiento,
+                status=status,
+                password=password,
+                FechaCreacion=FechaCreacion,
+                fechaExpiracion=fechaExpiracion,
+                DataMaxUse=DataMaxUse,
+                idVPN=idVPN,
+                idPackPrincipal=idPackPrincipal,
+                typeClient=typeClient,
+                userAdm=userAdm,
+                idvpnServerDefault=idvpnServerDefault
+                )
+                db.session.add(clien)
+
+                db.session.flush()
+                db.session.refresh(clien)
+                db.session.commit()
+                jsonstr1 = json.dumps(clien, cls=AlchemyEncoder)
+                return jsonstr1
+        elif request.method == 'GET':
+            json_data = request.get_json()
+            # aux = Nas.query.filter_by(id=json_data['id']).first()
+            # jsonstr1 = json.dumps(aux, cls=AlchemyEncoder)
+            # return jsonstr1
+    else:
+        return '404'
+
+
+
+
+
 
 # return render_template("index.html",posts=posts)
 
