@@ -48,7 +48,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.ext.declarative import DeclarativeMeta
 from dbconf import Conf
 from encrypt import AESCipher
-from jwcrypto import jwe, jwt
+# from jwcrypto import jwe, jwt
 # from radiusClass.nas import Nas
 
 # Init App
@@ -77,6 +77,12 @@ from radiusClass.radcheck import Radcheck
 
 from classP.administrador import Administrador
 from classP.client import Client
+from classP.packSubcription import PackSubcription
+from classP.invoice import Invoice
+from classP.detailInvoice import DetailInvoice
+from classP.comp import Comp
+
+
 from classP.vpnServer import VpnServer
 
 
@@ -816,7 +822,7 @@ def monitor():
         except:
             print('no found')
 
-        print(aux[value]['state']['local_ip'])
+        # print(aux[value]['state']['local_ip'])
 
         listRet.append(aux[value])
     print(listRet)
@@ -978,6 +984,42 @@ def openvpnobject():
 
 # <class 'str'>
 
+@app.route('/packSubcrition', methods=['POST', 'GET'])
+def packSubcrition():
+    content_type = request.headers.get('Content-Type')
+    if (content_type == 'application/json'):
+        if request.method == 'POST':
+            json_data = request.get_json()
+            nombre = json_data['nombre']
+            descripcion = json_data['descripcion']
+            typePack = json_data['typePack']
+            dataUsage = json_data['dataUsage']
+            price = json_data['price']
+            tax = json_data['tax']
+            day = json_data['day']
+            prO = json_data['prO']
+            taO = json_data['taO']
+            status = True
+            packSubcription = PackSubcription(
+                		nombre=nombre,
+                		descripcion=descripcion,
+                		typePack=typePack,
+                		dataUsage=dataUsage,
+                		price=price,
+                		tax=tax,
+                		day=day,
+                		prO=prO,
+                		taO=taO,
+                		status=status
+            )
+        elif request.method == 'GET':
+            aux = PackSubcription.query.all()
+            jsonstr1 = json.dumps(aux, cls=AlchemyEncoder)
+            return jsonstr1
+
+    else:
+        return '404'
+
 @app.route('/client', methods=['POST', 'GET'])
 def client():
     content_type = request.headers.get('Content-Type')
@@ -991,21 +1033,34 @@ def client():
                 print('Existe')
                 return 'ErrorUserExist'
             else:
+                datetime_object = datetime.datetime.now()
                 user = json_data['user']
                 nombre = json_data['nombre']
                 apellido = json_data['apellido']
                 documento = json_data['documento']
                 fechaNacimiento = json_data['fechaNacimiento']
-                status = json_data['status']
-                password = json_data['password']
-                FechaCreacion = json_data['FechaCreacion']
-                fechaExpiracion = json_data['fechaExpiracion']
-                DataMaxUse = json_data['DataMaxUse']
+                status = True
+                password = encrypt.encrypt(json_data['password'])
+                FechaCreacion = datetime_object
+                fechaExpiracion = datetime_object
+                DataMaxUse = -1
                 idVPN = json_data['idVPN']
                 idPackPrincipal = json_data['idPackPrincipal']
-                typeClient = json_data['typeClient']
-                userAdm = json_data['userAdm']
-                idvpnServerDefault = json_data['idvpnServerDefault']
+                typeClient = session['user']
+                userAdm = 'CLI'
+                idvpnServerDefault = 0
+                radChe = Radcheck(username=json_data['user'],
+                                  attribute='Cleartext-Password',
+                                  op=':=',
+                                  value=json_data['password'],
+                                  maxDataUsage=-1,
+                                  status=True,
+                                  expDate=datetime_object)
+
+                db.session.add(radChe)
+                db.session.flush()
+                db.session.refresh(radChe)
+                db.session.commit()
 
                 clien = Client(
                 user=user,
@@ -1018,7 +1073,7 @@ def client():
                 FechaCreacion=FechaCreacion,
                 fechaExpiracion=fechaExpiracion,
                 DataMaxUse=DataMaxUse,
-                idVPN=idVPN,
+                idVPN=radChe.id,
                 idPackPrincipal=idPackPrincipal,
                 typeClient=typeClient,
                 userAdm=userAdm,
@@ -1032,10 +1087,9 @@ def client():
                 jsonstr1 = json.dumps(clien, cls=AlchemyEncoder)
                 return jsonstr1
         elif request.method == 'GET':
-            json_data = request.get_json()
-            # aux = Nas.query.filter_by(id=json_data['id']).first()
-            # jsonstr1 = json.dumps(aux, cls=AlchemyEncoder)
-            # return jsonstr1
+            aux = Client.query.all()
+            jsonstr1 = json.dumps(aux, cls=AlchemyEncoder)
+            return jsonstr1
     else:
         return '404'
 
