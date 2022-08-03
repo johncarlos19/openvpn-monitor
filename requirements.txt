@@ -3,6 +3,7 @@ humanize
 bottle
 semantic_version
 Flask
+request
 jwcrypto
 Flask-SQLAlchemy
 Flask-Migrate

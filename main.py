@@ -43,12 +43,12 @@ from collections import OrderedDict, deque
 from pprint import pformat
 from semantic_version import Version as semver
 # from flask import Flask, request, jsonify
-from flask import Flask,session, request, render_template, url_for, jsonify, redirect, flash
+from flask import Flask,session, request,send_from_directory, send_file, render_template, url_for, jsonify, redirect, flash
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.ext.declarative import DeclarativeMeta
 from dbconf import Conf
 from encrypt import AESCipher
-# from jwcrypto import jwe, jwt
+#from jwcrypto import jwe, jwt
 # from radiusClass.nas import Nas
 
 # Init App
@@ -757,26 +757,46 @@ def _json_object_hook(d): return namedtuple('X', d.keys())(*d.values())
 @app.route('/status')
 def index():
 	if 'user' in session:
-		return encrypt.decrypt(session['password'])
-	return 'No session <a href="/login">Please Log in </a>'
-
+		return session['user']
 	return 'Please <a href="/login">Log in </a>'
 
-@app.route('/login')
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-	session['user'] = 'Kai'
-	session['password'] = encrypt.encrypt('admin1234')
-	return 'Logged in as: ' + session['user'] + '<a href="/logout"> Log out</a>'
+    content_type = request.headers.get('Content-Type')
+    if (content_type == 'application/json'):
+        if request.method == 'POST':
+            json_data = request.get_json()
+            adm = Administrador.query.filter_by(usuario=json_data['usuario']).first()
+            if adm is not None:
+                password = encrypt.decrypt(adm.password)
+                if password == json_data['password']:
+                    session['user'] = json_data['usuario']
+                    return 'Logged in as: ' + session['user'] + '<a href="/logout"> Log out</a>'
+                else:
+                    return 'UserAndPasswordIncorrect'
+            else:
+                return 'UserAndPasswordIncorrect'
+        
+    else:
+        return 404
 
 @app.route('/logout')
 def logout():
 	session.pop('user', None)
-	return 'Logged out. ' + '<a href="/">Home</a>'
+	return True
 
 @app.route('/', methods=['GET', 'POST'])
 def welcome():
     return "Hello World!"
 
+
+@app.route("/get-files/<string:filename>")
+def return_pdf(filename):
+    try:
+        print('entro'+os.getcwd()+'\\images\\flags\\')
+        return send_from_directory('images/flags/', filename, as_attachment=True)
+    except FileNotFoundError:
+        return 404
 
 @app.route('/openvpn-monitor/', methods=['GET'])
 def monitor():
@@ -990,17 +1010,20 @@ def packSubcrition():
     if (content_type == 'application/json'):
         if request.method == 'POST':
             json_data = request.get_json()
-            nombre = json_data['nombre']
-            descripcion = json_data['descripcion']
-            typePack = json_data['typePack']
-            dataUsage = json_data['dataUsage']
-            price = json_data['price']
-            tax = json_data['tax']
-            day = json_data['day']
-            prO = json_data['prO']
-            taO = json_data['taO']
-            status = True
-            packSubcription = PackSubcription(
+            packSubcription = None
+            if json_data['id'] is None:
+                nombre = json_data['nombre']
+                descripcion = json_data['descripcion']
+                typePack = json_data['typePack']
+                dataUsage = json_data['dataUsage']
+                price = json_data['price']
+                tax = json_data['tax']
+                day = json_data['day']
+                prO = json_data['prO']
+                taO = json_data['taO']
+                status = True
+                principal = json_data['principal']
+                packSubcription = PackSubcription(
                 		nombre=nombre,
                 		descripcion=descripcion,
                 		typePack=typePack,
@@ -1010,12 +1033,54 @@ def packSubcrition():
                 		day=day,
                 		prO=prO,
                 		taO=taO,
-                		status=status
+                		status=status,
+                        principal=principal
             )
+                db.session.add(packSubcription)
+                db.session.flush()
+                db.session.refresh(packSubcription)
+                db.session.commit()
+                jsonstr1 = json.dumps(packSubcription, cls=AlchemyEncoder)
+                return jsonstr1 
+            else:
+                aux = PackSubcription.query.filter_by(id=json_data['id']).first()
+                for key in json_data:
+                    aux[key] = json_data[key]
+                db.session.flush()
+                db.session.refresh(aux)
+                db.session.commit()
+                jsonstr1 = json.dumps(aux, cls=AlchemyEncoder)
+                return jsonstr1 
+
         elif request.method == 'GET':
-            aux = PackSubcription.query.all()
-            jsonstr1 = json.dumps(aux, cls=AlchemyEncoder)
-            return jsonstr1
+            json_data = request.get_json()
+            packSubcription = None
+            if json_data['id'] is None:
+                aux = PackSubcription.query.all()
+                jsonstr1 = json.dumps(aux, cls=AlchemyEncoder)
+                return jsonstr1
+            else:
+                aux = PackSubcription.query.filter_by(id=json_data['id']).first()
+                jsonstr1 = json.dumps(aux, cls=AlchemyEncoder)
+                return jsonstr1
+            
+
+    else:
+        return '404'
+
+@app.route('/setPlanClient', methods=['POST', 'GET'])
+def setPlanClient():
+    content_type = request.headers.get('Content-Type')
+    if (content_type == 'application/json'):
+        json_data = request.get_json()
+        if request.method == 'POST':
+            
+            aux = Client.query.filter_by(user=json_data['user']).first()
+            print(aux)
+            if aux is not None:
+                print()
+            else:
+                return None
 
     else:
         return '404'
@@ -1026,14 +1091,24 @@ def client():
     if (content_type == 'application/json'):
         if request.method == 'POST':
             json_data = request.get_json()
-
+            datetime_object = datetime.datetime.now()
             aux = Client.query.filter_by(user=json_data['user']).first()
             print(aux)
             if aux is not None:
                 print('Existe')
-                return 'ErrorUserExist'
+                for key in json_data:
+                    aux[key] = json_data[key]
+                aux.fechaMod = datetime_object
+                aux.userMod = session['user']
+                db.session.flush()
+                db.session.refresh(aux)
+                db.session.commit()
+                jsonstr1 = json.dumps(aux, cls=AlchemyEncoder)
+                return jsonstr1
+                
+                # return 'ErrorUserExist'
             else:
-                datetime_object = datetime.datetime.now()
+                
                 user = json_data['user']
                 nombre = json_data['nombre']
                 apellido = json_data['apellido']
@@ -1043,8 +1118,9 @@ def client():
                 password = encrypt.encrypt(json_data['password'])
                 FechaCreacion = datetime_object
                 fechaExpiracion = datetime_object
+                fechaMod = datetime_object
+                userMod = session['user']
                 DataMaxUse = -1
-                idVPN = json_data['idVPN']
                 idPackPrincipal = json_data['idPackPrincipal']
                 typeClient = session['user']
                 userAdm = 'CLI'
@@ -1074,9 +1150,11 @@ def client():
                 fechaExpiracion=fechaExpiracion,
                 DataMaxUse=DataMaxUse,
                 idVPN=radChe.id,
+                fechaMod=fechaMod,
                 idPackPrincipal=idPackPrincipal,
                 typeClient=typeClient,
                 userAdm=userAdm,
+                userMod=userMod,
                 idvpnServerDefault=idvpnServerDefault
                 )
                 db.session.add(clien)
@@ -1087,9 +1165,19 @@ def client():
                 jsonstr1 = json.dumps(clien, cls=AlchemyEncoder)
                 return jsonstr1
         elif request.method == 'GET':
-            aux = Client.query.all()
-            jsonstr1 = json.dumps(aux, cls=AlchemyEncoder)
-            return jsonstr1
+            json_data = request.get_json()
+            aux = None
+            if json_data['user'] is None:
+                aux = Client.query.all()
+                jsonstr1 = json.dumps(aux, cls=AlchemyEncoder)
+                return jsonstr1
+            else:
+                aux = Client.query.filter_by(user=json_data['user']).first()
+                jsonstr1 = json.dumps(aux, cls=AlchemyEncoder)
+                return jsonstr1
+            # aux = Client.query.all()
+            # jsonstr1 = json.dumps(aux, cls=AlchemyEncoder)
+            # return jsonstr1
     else:
         return '404'
 

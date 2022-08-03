@@ -17,6 +17,8 @@ class Client(db.Model):
 	password=db.Column(db.String(255))
 	FechaCreacion=db.Column(db.DateTime)
 	fechaExpiracion=db.Column(db.DateTime)
+	fechaMod=db.Column(db.DateTime)
+	userMod=db.Column(db.String(50))
 	DataMaxUse=db.Column(db.Integer)
 	idVPN=db.Column(db.Integer)
 	idPackPrincipal=db.Column(db.Integer)

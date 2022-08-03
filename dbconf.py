@@ -1,5 +1,5 @@
 import os
-from flask import Flask,session,request,render_template,url_for,jsonify,redirect,flash
+from flask import Flask,send_file, send_from_directory,session,request,render_template,url_for,jsonify,redirect,flash
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.ext.declarative import DeclarativeMeta
 

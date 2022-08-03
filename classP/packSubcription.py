@@ -20,7 +20,7 @@ class PackSubcription(db.Model):
 	prO=db.Column(db.Float)
 	taO=db.Column(db.Float)
 	status=db.Column(db.Boolean)
-	principal = db.Column(db.Boolean)
+	principal = db.Column(db.Boolean, default= False)
 
 
 # class packSubcription:

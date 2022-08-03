@@ -17,7 +17,7 @@ class Invoice(db.Model):
 	prO=db.Column(db.Float)
 	taO=db.Column(db.Float)
 	status=db.Column(db.Boolean)
-	fechaCreacion=db.Column(db.Datetime)
+	fechaCreacion=db.Column(db.DateTime)
 
 
 
