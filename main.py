@@ -35,6 +35,7 @@ import socket
 import string
 import sys
 import json
+import requests
 from collections import namedtuple
 from json import JSONEncoder
 from datetime import datetime
@@ -56,7 +57,7 @@ appConf = Conf()
 appConf.confSys()
 app = appConf.FlaskConf()
 db = appConf.DBConf()
-encrypt = AESCipher('BY5kWP2hCv8wwkpBfNP96BMmGuuB3IHS')
+encrypt = AESCipher(b'zM6WNtrCoFMa3cNkGy2p9Yw1RGB-JJD4nlwZy4121MI=')
 # app.config['SECRET_KEY'] = 'thisissecret'
 # our database uri
 # username = "postgres"
@@ -753,6 +754,17 @@ def get_args():
 def _json_object_hook(d): return namedtuple('X', d.keys())(*d.values())
 
 
+@app.before_request
+def before_request_func():
+    if request.path =='/login' or request.path =='/status' or request.path =='/':
+        print('Its ok')
+
+    else:
+        if 'user' in session:
+            print('Its ok')
+        else:
+            return "Error"
+
 
 @app.route('/status')
 def index():
@@ -768,6 +780,7 @@ def login():
             json_data = request.get_json()
             adm = Administrador.query.filter_by(usuario=json_data['usuario']).first()
             if adm is not None:
+                print(adm.password)
                 password = encrypt.decrypt(adm.password)
                 if password == json_data['password']:
                     session['user'] = json_data['usuario']
@@ -783,7 +796,8 @@ def login():
 @app.route('/logout')
 def logout():
 	session.pop('user', None)
-	return True
+	return 200
+
 
 @app.route('/', methods=['GET', 'POST'])
 def welcome():
@@ -944,8 +958,9 @@ def openvpnobject():
             maxRegister = json_data['maxRegister']
             clientActive = json_data['clientActive']
             clientRegister = json_data['clientRegister']
+            httpPort = json_data['httpPort']
 
-            vpnServer = VpnServer(host=host, port=port, name=name, password=password, show_disconnect=show_disconnect,
+            vpnServer = VpnServer(host=host, httpPort=httpPort, port=port, name=name, password=password, show_disconnect=show_disconnect,
                                   maxRegister=maxRegister, clientActive=clientActive, clientRegister=clientRegister)
             db.session.add(vpnServer)
             # db.session.commit()
@@ -1091,13 +1106,19 @@ def client():
     if (content_type == 'application/json'):
         if request.method == 'POST':
             json_data = request.get_json()
-            datetime_object = datetime.datetime.now()
-            aux = Client.query.filter_by(user=json_data['user']).first()
+            datetime_object = datetime.now()
+            aux = None
+            try:
+                aux = Client.query.filter_by(user=json_data['user']).first()
+            except:
+                aux = None
+                print('no found error')
             print(aux)
-            if aux is not None:
+            if aux is not None and json_data['status1'] == 'edit':
                 print('Existe')
                 for key in json_data:
-                    aux[key] = json_data[key]
+                    if key != 'status1':
+                        aux[key] = json_data[key]
                 aux.fechaMod = datetime_object
                 aux.userMod = session['user']
                 db.session.flush()
@@ -1108,7 +1129,11 @@ def client():
                 
                 # return 'ErrorUserExist'
             else:
-                
+                idVPNServ = None
+                if json_data['idvpnServerDefault'] is not None:
+                    idVPNServ = json_data['idvpnServerDefault']
+                else:
+                    idVPNServ = 0
                 user = json_data['user']
                 nombre = json_data['nombre']
                 apellido = json_data['apellido']
@@ -1122,9 +1147,9 @@ def client():
                 userMod = session['user']
                 DataMaxUse = -1
                 idPackPrincipal = json_data['idPackPrincipal']
-                typeClient = session['user']
-                userAdm = 'CLI'
-                idvpnServerDefault = 0
+                typeClient = 'CLI'
+                userAdm = session['user']
+                idvpnServerDefault = idVPNServ
                 radChe = Radcheck(username=json_data['user'],
                                   attribute='Cleartext-Password',
                                   op=':=',
@@ -1157,8 +1182,15 @@ def client():
                 userMod=userMod,
                 idvpnServerDefault=idvpnServerDefault
                 )
+                vpnServ = VpnServer.query.filter_by(id=idvpnServerDefault).first()
+                if vpnServ is not None:
+                    api_url = "http://"+vpnServ.host+':'+str(vpnServ.httpPort)+"/createClient"
+                    todo = {"user": user, "select": "1", "key": encrypt.encrypt('admin1234')}
+                    headers = {"Content-Type": "application/json"}
+                    response = requests.post(api_url, data=json.dumps(todo), headers=headers)
+                    vari = response.json()
+                    print(vari)
                 db.session.add(clien)
-
                 db.session.flush()
                 db.session.refresh(clien)
                 db.session.commit()

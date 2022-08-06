@@ -48,7 +48,7 @@ class Conf:
     def confSys(self):
         global db
         global app
-        encrypt = AESCipher('BY5kWP2hCv8wwkpBfNP96BMmGuuB3IHS')
+        encrypt = AESCipher(b'zM6WNtrCoFMa3cNkGy2p9Yw1RGB-JJD4nlwZy4121MI=')
         app = Flask(__name__)
         app.secret_key = os.urandom(25)
         app.config["SQLALCHEMY_DATABASE_URI"] = f"postgresql://{username}:{password}@{domain}:{port}/{dbname}"
@@ -113,6 +113,7 @@ class Conf:
 
                 
         else:
+            print(encrypt.decrypt(adm.password))
             print('Existe')
 
 

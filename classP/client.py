@@ -14,7 +14,7 @@ class Client(db.Model):
 	documento=db.Column(db.String(20))
 	fechaNacimiento=db.Column(db.DateTime)
 	status=db.Column(db.Boolean)
-	password=db.Column(db.String(255))
+	password=db.Column(db.Text)
 	FechaCreacion=db.Column(db.DateTime)
 	fechaExpiracion=db.Column(db.DateTime)
 	fechaMod=db.Column(db.DateTime)

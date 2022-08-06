@@ -15,7 +15,7 @@ class Administrador(db.Model):
 	typeUser=db.Column(db.String(3))
 	documento=db.Column(db.String(20))
 	estado=db.Column(db.Boolean)
-	password=db.Column(db.String(255))
+	password=db.Column(db.Text)
 	fakeInvoice=db.Column(db.Boolean)
 
 

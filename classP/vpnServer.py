@@ -11,6 +11,7 @@ class VpnServer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     host = db.Column(db.String(20))
     port = db.Column(db.Integer)
+    httpPort = db.Column(db.Integer)
     name = db.Column(db.String(50))
     password = db.Column(db.String(50))
     show_disconnect = db.Column(db.Boolean)
