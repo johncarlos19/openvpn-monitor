@@ -10,6 +10,7 @@ class VpnServer(db.Model):
     __tablename__ = 'vpnServer'
     id = db.Column(db.Integer, primary_key=True)
     host = db.Column(db.String(20))
+    hostInternal = db.Column(db.String(50))
     port = db.Column(db.Integer)
     httpPort = db.Column(db.Integer)
     name = db.Column(db.String(50))
@@ -18,6 +19,8 @@ class VpnServer(db.Model):
     maxRegister = db.Column(db.Integer)
     clientActive = db.Column(db.Integer)
     clientRegister = db.Column(db.Integer)
+    ram = db.Column(db.Integer)
+    cpu = db.Column(db.Integer)
 
 
 # class vpnServer:

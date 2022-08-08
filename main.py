@@ -782,7 +782,7 @@ def login():
             if adm is not None:
                 print(adm.password)
                 password = encrypt.decrypt(adm.password)
-                if password == json_data['password']:
+                if password['password'] == json_data['password']:
                     session['user'] = json_data['usuario']
                     return 'Logged in as: ' + session['user'] + '<a href="/logout"> Log out</a>'
                 else:
@@ -959,8 +959,11 @@ def openvpnobject():
             clientActive = json_data['clientActive']
             clientRegister = json_data['clientRegister']
             httpPort = json_data['httpPort']
+            ram = json_data['ram']
+            cpu = json_data['cpu']
+            hostInternal = json_data['hostInternal']
 
-            vpnServer = VpnServer(host=host, httpPort=httpPort, port=port, name=name, password=password, show_disconnect=show_disconnect,
+            vpnServer = VpnServer(ram=ram, cpu=cpu, hostInternal=hostInternal, host=host, httpPort=httpPort, port=port, name=name, password=password, show_disconnect=show_disconnect,
                                   maxRegister=maxRegister, clientActive=clientActive, clientRegister=clientRegister)
             db.session.add(vpnServer)
             # db.session.commit()
@@ -1017,16 +1020,24 @@ def openvpnobject():
         return '404'
 
 
-# <class 'str'>
 
+
+# <class 'str'>
 @app.route('/packSubcrition', methods=['POST', 'GET'])
 def packSubcrition():
     content_type = request.headers.get('Content-Type')
+    print('rr')
     if (content_type == 'application/json'):
         if request.method == 'POST':
             json_data = request.get_json()
             packSubcription = None
-            if json_data['id'] is None:
+            try:
+                packSubcription = PackSubcription.query.filter_by(id=json_data['id']).first()
+            except:
+                packSubcription = None
+                print('no found error')
+
+            if packSubcription is None:
                 nombre = json_data['nombre']
                 descripcion = json_data['descripcion']
                 typePack = json_data['typePack']
@@ -1083,7 +1094,7 @@ def packSubcrition():
     else:
         return '404'
 
-@app.route('/setPlanClient', methods=['POST', 'GET'])
+@app.route('/planClient', methods=['POST', 'GET'])
 def setPlanClient():
     content_type = request.headers.get('Content-Type')
     if (content_type == 'application/json'):
@@ -1091,6 +1102,7 @@ def setPlanClient():
         if request.method == 'POST':
             
             aux = Client.query.filter_by(user=json_data['user']).first()
+
             print(aux)
             if aux is not None:
                 print()

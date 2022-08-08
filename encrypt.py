@@ -4,6 +4,7 @@ import hashlib
 import sys
 
 from cryptography.fernet import Fernet
+import jwt
 
 
 
@@ -13,13 +14,14 @@ class AESCipher(object):
 
     def __init__(self, key):
         self.fernet = Fernet(key)
+        self.secret_key = key
 
     def encrypt(self, raw):
-        enctex = self.fernet.encrypt(raw.encode("utf8"))
-        return enctex.decode("utf8")
+        enctex = jwt.encode(raw, self.secret_key, algorithm='HS256')
+        return enctex
 
     def decrypt(self, enc):
         print(type(enc))
-        dectex = self.fernet.decrypt(str.encode(enc)).decode()
+        dectex = jwt.decode(enc, self.secret_key, algorithms=['HS256'])
         return dectex
 

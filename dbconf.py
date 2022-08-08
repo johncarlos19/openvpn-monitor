@@ -48,14 +48,17 @@ class Conf:
     def confSys(self):
         global db
         global app
+        global engine
         encrypt = AESCipher(b'zM6WNtrCoFMa3cNkGy2p9Yw1RGB-JJD4nlwZy4121MI=')
         app = Flask(__name__)
         app.secret_key = os.urandom(25)
         app.config["SQLALCHEMY_DATABASE_URI"] = f"postgresql://{username}:{password}@{domain}:{port}/{dbname}"
         app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+        app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {"pool_pre_ping": True, "pool_size": 10, "max_overflow": 2, "pool_recycle": 300, "pool_use_lifo": True}
         app.config["SQLALCHEMY_BINDS"] = {
         dbname2:        f"postgresql://{username}:{password}@{domain}:{port}/{dbname2}"}
         db = SQLAlchemy(app)
+
         from classP.administrador import Administrador
         from classP.client import Client
         from radiusClass.radcheck import Radcheck
@@ -69,7 +72,7 @@ class Conf:
 		typeUser='ADM',
 		documento='1234567890',
 		estado=True,
-		password=encrypt.encrypt('admin1234'),
+		password=encrypt.encrypt({"password":"admin1234"}),
 		fakeInvoice=True
                 )
             db.session.add(au)
