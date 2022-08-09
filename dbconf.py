@@ -1,6 +1,8 @@
 import os
-from flask import Flask,send_file, send_from_directory,session,request,render_template,url_for,jsonify,redirect,flash
+from flask import Flask ,send_file, send_from_directory,session,request,render_template,url_for,jsonify,redirect,flash
 from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS, cross_origin
+
 from sqlalchemy.ext.declarative import DeclarativeMeta
 
 import datetime
@@ -49,9 +51,12 @@ class Conf:
         global db
         global app
         global engine
+        global cors
         encrypt = AESCipher(b'zM6WNtrCoFMa3cNkGy2p9Yw1RGB-JJD4nlwZy4121MI=')
         app = Flask(__name__)
         app.secret_key = os.urandom(25)
+        app.config['CORS_HEADERS'] = 'Content-Type'
+        cors = CORS(app, resources={r"/*": {"origins": "*"}})
         app.config["SQLALCHEMY_DATABASE_URI"] = f"postgresql://{username}:{password}@{domain}:{port}/{dbname}"
         app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {"pool_pre_ping": True, "pool_size": 10, "max_overflow": 2, "pool_recycle": 300, "pool_use_lifo": True}
@@ -70,6 +75,7 @@ class Conf:
 		nombre='Administrador',
 		apellido='',
 		typeUser='ADM',
+		email='admin@whiteholetech.com',
 		documento='1234567890',
 		estado=True,
 		password=encrypt.encrypt({"password":"admin1234"}),
@@ -126,3 +132,5 @@ class Conf:
         return app
     def DBConf(self):
         return db
+    def Cors(self):
+        return cors

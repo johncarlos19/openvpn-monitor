@@ -5,7 +5,7 @@ conf = Conf()
 db = conf.DBConf()
 
 
-class DetailInvoice:
+class DetailInvoice(db.Model):
 	__bind_key__ = 'vpnManager'
 	__tablename__ = 'detailInvoice'
 	id=db.Column(db.Integer, primary_key=True)

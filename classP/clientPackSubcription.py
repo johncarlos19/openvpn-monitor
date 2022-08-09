@@ -11,6 +11,8 @@ class ClientPackSubcription(db.Model):
     userClient = db.Column(db.String(50), primary_key=True)
     idPack = db.Column(db.Integer, primary_key=True)
     type = db.Column(db.Integer)
+    exp = db.Column(db.DateTime)
+    isTemporary = db.Column(db.Boolean, default= False)
 
 
 # class ClientPackSubcription:

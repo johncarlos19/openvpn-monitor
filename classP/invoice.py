@@ -1,3 +1,5 @@
+from datetime import datetime
+from email.policy import default
 from dbconf import Conf
 
 conf = Conf()
@@ -16,8 +18,9 @@ class Invoice(db.Model):
 	tax=db.Column(db.Float)
 	prO=db.Column(db.Float)
 	taO=db.Column(db.Float)
-	status=db.Column(db.Boolean)
-	fechaCreacion=db.Column(db.DateTime)
+	status=db.Column(db.Boolean,default=True)
+	fechaCreacion=db.Column(db.DateTime, default=datetime.now())
+	cruce=db.Column(db.Boolean, default=False)
 
 
 

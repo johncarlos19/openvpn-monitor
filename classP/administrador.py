@@ -12,6 +12,7 @@ class Administrador(db.Model):
 	usuario=db.Column(db.String(50), primary_key=True)
 	nombre=db.Column(db.String(50))
 	apellido=db.Column(db.String(50))
+	email=db.Column(db.String(50))
 	typeUser=db.Column(db.String(3))
 	documento=db.Column(db.String(20))
 	estado=db.Column(db.Boolean)

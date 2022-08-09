@@ -3,6 +3,8 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import flask_sqlalchemy
+
 try:
     import ConfigParser as configparser
 except ImportError:
@@ -38,7 +40,7 @@ import json
 import requests
 from collections import namedtuple
 from json import JSONEncoder
-from datetime import datetime
+from datetime import datetime, timedelta
 from humanize import naturalsize
 from collections import OrderedDict, deque
 from pprint import pformat
@@ -46,8 +48,10 @@ from semantic_version import Version as semver
 # from flask import Flask, request, jsonify
 from flask import Flask,session, request,send_from_directory, send_file, render_template, url_for, jsonify, redirect, flash
 from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS, cross_origin
 from sqlalchemy.ext.declarative import DeclarativeMeta
 from dbconf import Conf
+import jwt
 from encrypt import AESCipher
 #from jwcrypto import jwe, jwt
 # from radiusClass.nas import Nas
@@ -57,6 +61,7 @@ appConf = Conf()
 appConf.confSys()
 app = appConf.FlaskConf()
 db = appConf.DBConf()
+cors = appConf.Cors()
 encrypt = AESCipher(b'zM6WNtrCoFMa3cNkGy2p9Yw1RGB-JJD4nlwZy4121MI=')
 # app.config['SECRET_KEY'] = 'thisissecret'
 # our database uri
@@ -82,6 +87,8 @@ from classP.packSubcription import PackSubcription
 from classP.invoice import Invoice
 from classP.detailInvoice import DetailInvoice
 from classP.comp import Comp
+from classP.clientPackSubcription import ClientPackSubcription
+
 
 
 from classP.vpnServer import VpnServer
@@ -155,15 +162,26 @@ class AlchemyEncoder(json.JSONEncoder):
             # an SQLAlchemy class
             fields = {}
             for field in [x for x in dir(obj) if not x.startswith('_') and x != 'metadata']:
+
                 data = obj.__getattribute__(field)
                 try:
-                    json.dumps(data)  # this will fail on non-encodable values, like other classes
-                    fields[field] = data
+                    print(field)
+                    print(type(data))
+                    print(data)
+                    if isinstance(data, datetime):
+                        fields[field] = str(data)
+                    elif isinstance(data, flask_sqlalchemy.BaseQuery):
+                        fields[field] = None
+                        # fields[field] = str(data)
+                    else:
+                        json.dumps(data)  # this will fail on non-encodable values, like other classes
+                        fields[field] = data
                 except TypeError:
                     fields[field] = None
             # a json-encodable dict
             return fields
-
+        elif isinstance(obj, datetime):
+            return str(obj)
         return json.JSONEncoder.default(self, obj)
 
 
@@ -756,35 +774,101 @@ def _json_object_hook(d): return namedtuple('X', d.keys())(*d.values())
 
 @app.before_request
 def before_request_func():
+    headers = request.headers
+    auth = headers.get("X-Api-Key")
     if request.path =='/login' or request.path =='/status' or request.path =='/':
         print('Its ok')
-
     else:
-        if 'user' in session:
+        if auth is not None:
+            print('bien')
+            try:
+                decode_token = encrypt.decrypt(auth)
+                print("Token is still valid and active")
+            except jwt.ExpiredSignatureError:
+                print("Token expired. Get new one")
+            except jwt.InvalidTokenError:
+                print("Invalid Token")
+        elif 'user' in session:
             print('Its ok')
         else:
             return "Error"
+        # try:
+        #     decode_token = jwt.decode(encoded_token, 'MySECRET goes here', algorithms=['HS256'])
+        #     print("Token is still valid and active")
+        # except jwt.ExpiredSignatureError:
+        #     print("Token expired. Get new one")
+        # except jwt.InvalidTokenError:
+        #     print("Invalid Token")
 
 
-@app.route('/status')
+@app.route('/status', methods=['GET', 'POST'])
+@cross_origin()
 def index():
-	if 'user' in session:
-		return session['user']
-	return 'Please <a href="/login">Log in </a>'
+    content_type = request.headers.get('Content-Type')
+    print(content_type)
+    if (content_type == 'application/json'):
+        print('entro')
+        if request.method == 'POST':
+            json_data = request.get_json()
+            jsonstr1 = json.dumps({"status": False, "token": None}, cls=AlchemyEncoder)
+
+            try:
+                decode_token = encrypt.decrypt(json_data["token"])
+                jsonstr1 = json.dumps({"status": True, "token": encrypt.encrypt(decode_token)}, cls=AlchemyEncoder)
+                print("Token is still valid and active")
+                return jsonstr1
+
+            except jwt.ExpiredSignatureError as e:
+                print("Token expired. Get new one")
+                return jsonstr1
+            except jwt.InvalidTokenError:
+                print("Invalid Token")
+                return jsonstr1
+
+
+
+    else:
+        jsonstr1 = json.dumps({"status": False, "token": None}, cls=AlchemyEncoder)
+        return jsonstr1
+
 
 @app.route('/login', methods=['GET', 'POST'])
+@cross_origin()
 def login():
     content_type = request.headers.get('Content-Type')
     if (content_type == 'application/json'):
         if request.method == 'POST':
             json_data = request.get_json()
-            adm = Administrador.query.filter_by(usuario=json_data['usuario']).first()
+            adm = None
+            passwordS = None
+            try:
+                adm = Administrador.query.filter_by(usuario=json_data['usuario']).first()
+                passwordS = json_data['password']
+            except:
+                adm = None
+                passwordS = None
             if adm is not None:
                 print(adm.password)
                 password = encrypt.decrypt(adm.password)
-                if password['password'] == json_data['password']:
+                if password['password'] == passwordS:
                     session['user'] = json_data['usuario']
-                    return 'Logged in as: ' + session['user'] + '<a href="/logout"> Log out</a>'
+                    vari = None
+                    dt = datetime.now() + timedelta(days=2)
+                    ewc = {
+                        "user": json_data['usuario'],
+                        "fullname": adm.nombre + ' '+adm.apellido,
+                        "exp": dt
+                    }
+                    vari = {
+                        "user": json_data['usuario'],
+                        "email": adm.email,
+                        "fullname": adm.nombre + ' ' + adm.apellido,
+                        "token": encrypt.encrypt(ewc),
+                        "status": 1
+                    }
+                    jsonstr1 = json.dumps(vari, cls=AlchemyEncoder)
+                    return jsonstr1
+                    # return 'Logged in as: ' + session['user'] + '<a href="/logout"> Log out</a>'
                 else:
                     return 'UserAndPasswordIncorrect'
             else:
@@ -793,18 +877,21 @@ def login():
     else:
         return 404
 
-@app.route('/logout')
+@app.route('/logout', methods=['GET', 'POST'])
+@cross_origin()
 def logout():
 	session.pop('user', None)
-	return 200
+	return "ok"
 
 
 @app.route('/', methods=['GET', 'POST'])
+@cross_origin()
 def welcome():
     return "Hello World!"
 
 
 @app.route("/get-files/<string:filename>")
+@cross_origin()
 def return_pdf(filename):
     try:
         print('entro'+os.getcwd()+'\\images\\flags\\')
@@ -813,6 +900,7 @@ def return_pdf(filename):
         return 404
 
 @app.route('/openvpn-monitor/', methods=['GET'])
+@cross_origin()
 def monitor():
     # args = get_args()
     # wsgi = False
@@ -866,6 +954,7 @@ def monitor():
 
 
 @app.route('/radacct', methods=['GET'])
+@cross_origin()
 def radacct():
     content_type = request.headers.get('Content-Type')
     if (content_type == 'application/json'):
@@ -885,6 +974,7 @@ def radacct():
 
 
 @app.route('/nas', methods=['GET'])
+@cross_origin()
 def nas():
     print(type('string'))
     # <class 'str'>
@@ -905,6 +995,7 @@ def nas():
 
 
 @app.route('/nasobject', methods=['POST', 'GET'])
+@cross_origin()
 def nasobject():
     content_type = request.headers.get('Content-Type')
     if (content_type == 'application/json'):
@@ -944,6 +1035,7 @@ def nasobject():
 # Class Principal
 
 @app.route('/openvpnServer', methods=['POST', 'GET'])
+@cross_origin()
 def openvpnobject():
     content_type = request.headers.get('Content-Type')
     if (content_type == 'application/json'):
@@ -1024,6 +1116,7 @@ def openvpnobject():
 
 # <class 'str'>
 @app.route('/packSubcrition', methods=['POST', 'GET'])
+@cross_origin()
 def packSubcrition():
     content_type = request.headers.get('Content-Type')
     print('rr')
@@ -1095,24 +1188,207 @@ def packSubcrition():
         return '404'
 
 @app.route('/planClient', methods=['POST', 'GET'])
+@cross_origin()
 def setPlanClient():
     content_type = request.headers.get('Content-Type')
     if (content_type == 'application/json'):
         json_data = request.get_json()
         if request.method == 'POST':
             
-            aux = Client.query.filter_by(user=json_data['user']).first()
+            client = Client.query.filter_by(user=json_data['user']).first()
+            auxP = PackSubcription.query.filter_by(id=json_data['id']).first()
 
-            print(aux)
-            if aux is not None:
+            print(client)
+            if client is not None and auxP is not None:
+                if client.idPackPrincipal is not None and auxP.principal == True:
+                    clpack = ClientPackSubcription.query.filter_by(userClient=json_data['user'], idPack=auxP.id).first()
+                    anotherPack = PackSubcription.query.filter_by(id=json_data['anotherID']).first()
+                    if clpack is not None and anotherPack is not None:
+                        clpack.idPack = anotherPack.id
+                        db.session.flush()
+                        db.session.refresh(clpack)
+                        db.session.commit()
+
+                        client.idPackPrincipal = anotherPack.id
+                        client.DataMaxUse -=auxP.dataUsage
+                        client.DataMaxUse +=anotherPack.dataUsage
+                        db.session.flush()
+                        db.session.refresh(client)
+                        db.session.commit()
+                        client.sta = 'change'
+                        jsonstr1 = json.dumps(client, cls=AlchemyEncoder)
+                        return jsonstr1
+                    else:
+                        return 'Error'
+
+                elif client.idPackPrincipal is None  and auxP.principal == True:
+                    clientPackSubcription = ClientPackSubcription(userClient=client.user, idPack=auxP.id,type=json_data['type'],
+                    exp=client.fechaExpiracion, isTemporary=json_data['isTemporary'])
+                    db.session.add(clientPackSubcription)
+                    db.session.flush()
+                    db.session.refresh(clientPackSubcription)
+                    db.session.commit()
+
+                    client.idPackPrincipal = auxP.id
+                    client.DataMaxUse +=1
+                    client.DataMaxUse +=auxP.dataUsage
+                    db.session.flush()
+                    db.session.refresh(client)
+                    db.session.commit()
+                    client.sta = 'newPack'
+                    jsonstr1 = json.dumps(client, cls=AlchemyEncoder)
+                    return jsonstr1
+                elif client.idPackPrincipal is not None  and auxP.principal == False:
+                    clientPackSubcription = ClientPackSubcription(userClient=client.user, idPack=auxP.id,type=json_data['type'],
+                    exp=client.fechaExpiracion, isTemporary=json_data['isTemporary'])
+                    db.session.add(clientPackSubcription)
+                    db.session.flush()
+                    db.session.refresh(clientPackSubcription)
+                    db.session.commit()
+
+
+                    client.DataMaxUse +=auxP.dataUsage
+                    db.session.flush()
+                    db.session.refresh(client)
+                    db.session.commit()
+                    client.sta = 'extra'
+                    jsonstr1 = json.dumps(client, cls=AlchemyEncoder)
+                    return jsonstr1
+                else:
+                    return 'Error'
+
+
                 print()
             else:
                 return None
+        elif request.method == 'GET':
+            datetime_object = datetime.now()
+            aux = None
+            try:
+                if json_data['status1'] == 'user':
+                    aux = ClientPackSubcription.query.filter_by(userClient=json_data['user']).first()
+                elif json_data['status1'] == 'one':
+                    aux = ClientPackSubcription.query.filter_by(userClient=json_data['user'],idPack=json_data['id']).first()
+                else:
+                    aux = PackSubcription.query.all()
+
+            except:
+                aux = None
+                print('no found error')
+                return None
+            jsonstr1 = json.dumps(aux, cls=AlchemyEncoder)
+            return jsonstr1
 
     else:
         return '404'
 
+
+@app.route('/processPay', methods=['POST', 'GET'])
+@cross_origin()
+def processPay():
+    content_type = request.headers.get('Content-Type')
+    if (content_type == 'application/json'):
+        json_data = request.get_json()
+        listPlan = []
+        if request.method == 'POST':
+
+            client = Client.query.filter_by(user=json_data['user']).first()
+
+            packSub = ClientPackSubcription.query.filter_by(userClient=json_data['user']).all()
+            totalO = 0
+            taxO = 0
+            total = 0
+            tax = 0
+            princi = None
+            detailInvoice = []
+            if client is not None and packSub is not None:
+                for key in packSub:
+                    subcri = PackSubcription.query.filter_by(id=key.idPack).first()
+                    totalO += subcri.prO
+                    taxO += subcri.taO
+
+                    total += subcri.price
+                    tax += subcri.tax
+                    listPlan.append(subcri)
+                invoice = Invoice(
+                    detail=json_data['detail'],
+                    idClient=json_data['user'],
+                    price=total,
+                    tax=tax,
+                    prO=totalO,
+                    taO=taxO,
+                    cruce=json_data['cruce']
+                )
+                db.session.add(invoice)
+                db.session.flush()
+                db.session.refresh(invoice)
+                db.session.commit()
+                print(invoice.id)
+                for key in listPlan:
+
+                    detInv = DetailInvoice(
+
+                        nombre=key.nombre,
+                        descripcion=key.descripcion,
+                        typePack=key.typePack,
+                        dataUsage=key.dataUsage,
+                        price=key.price,
+                        tax=key.tax,
+                        day=key.day,
+                        prO=key.prO,
+                        taO=key.taO,
+                        idInvoice=invoice.id
+                        )
+                    db.session.add(detInv)
+                    db.session.flush()
+                    db.session.refresh(detInv)
+                    db.session.commit()
+                    detailInvoice.append(detInv)
+                    packSubEdit = ClientPackSubcription.query.filter_by(userClient=json_data['user'], idPack= key.id).first()
+                    packSubEdit.exp = invoice.fechaCreacion+timedelta(days=key.day)
+                    db.session.flush()
+                    db.session.refresh(packSubEdit)
+                    db.session.commit()
+                    if key.principal == True:
+                        princi = packSubEdit
+                client.fechaExpiracion = princi.exp
+                db.session.flush()
+                db.session.refresh(client)
+                db.session.commit()
+                varia = {
+                    "invoice":invoice,
+                    "detail": detailInvoice
+                }
+                jsonstr1 = json.dumps(varia, cls=AlchemyEncoder)
+                return jsonstr1
+
+
+
+
+
+
+
+        elif request.method == 'GET':
+            print('hola')
+            datetime_object = datetime.now()
+            invoList = None
+
+            try:
+                invoList = Invoice.query.filter_by(idClient=json_data['user']).all()
+
+            except Exception as e:
+                print(e)
+                print('no found error')
+                return None
+            jsonstr1 = json.dumps(invoList, cls=AlchemyEncoder)
+            return jsonstr1
+
+    else:
+        return '404'
+
+
 @app.route('/client', methods=['POST', 'GET'])
+@cross_origin()
 def client():
     content_type = request.headers.get('Content-Type')
     if (content_type == 'application/json'):
@@ -1233,6 +1509,7 @@ def client():
 # return render_template("index.html",posts=posts)
 
 @app.route('/openvpn-monitor-remove/', methods=['POST'])
+@cross_origin()
 def openvpnmonitorremove():
     content_type = request.headers.get('Content-Type')
     if (content_type == 'application/json'):

@@ -12,3 +12,4 @@ psycopg2
 # pycrypto
 pycryptodome
 pyjwt
+flask_cors
